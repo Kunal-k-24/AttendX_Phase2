@@ -1,11 +1,14 @@
 package com.example.attendx;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.*;
@@ -36,8 +39,29 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
         userId = FirebaseAuth.getInstance().getCurrentUser().getUid();
         usersRef = FirebaseDatabase.getInstance().getReference("Users").child(userId);
 
+        // ✅ Request Camera Permission
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 100);
+        } else {
+            startQRScanner();
+        }
+
         fetchStudentData();
         setupBiometricAuth();
+    }
+
+    // ✅ Request Camera Permission at Runtime
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startQRScanner();
+            } else {
+                Toast.makeText(this, "Camera permission is required to scan QR codes!", Toast.LENGTH_LONG).show();
+                finish();
+            }
+        }
     }
 
     private void fetchStudentData() {
@@ -88,11 +112,17 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
                 .build();
     }
 
+    private void startQRScanner() {
+        scannerView.setResultHandler(this);
+        scannerView.startCamera();
+    }
+
     @Override
     public void onResume() {
         super.onResume();
-        scannerView.setResultHandler(this);
-        scannerView.startCamera();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            startQRScanner();
+        }
     }
 
     @Override
