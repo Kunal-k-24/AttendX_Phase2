@@ -1,6 +1,7 @@
 package com.example.attendx;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.widget.Toast;
@@ -50,7 +51,7 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
         setupBiometricAuth();
     }
 
-    // ✅ Request Camera Permission at Runtime
+    // ✅ Handle Camera Permission at Runtime
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -73,13 +74,15 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
                     enrollmentNo = snapshot.child("enrollment").getValue(String.class);
                     isStudentDataLoaded = (studentName != null && enrollmentNo != null);
                 } else {
-                    finish();
+                    Toast.makeText(QRScannerActivity.this, "Student data not found!", Toast.LENGTH_LONG).show();
+                    redirectToStudentDashboard();
                 }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
-                finish();
+                Toast.makeText(QRScannerActivity.this, "Failed to fetch student data.", Toast.LENGTH_LONG).show();
+                redirectToStudentDashboard();
             }
         });
     }
@@ -98,8 +101,8 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
                 super.onAuthenticationFailed();
                 failedAttempts++;
                 if (failedAttempts >= 4) {
-                    Toast.makeText(QRScannerActivity.this, "Invalid fingerprint. Attendance not marked.", Toast.LENGTH_LONG).show();
-                    finish();
+                    Toast.makeText(QRScannerActivity.this, "Invalid fingerprint. ", Toast.LENGTH_LONG).show();
+                    redirectToStudentDashboard();
                 }
             }
         });
@@ -134,7 +137,8 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
     @Override
     public void handleResult(Result rawResult) {
         if (!isStudentDataLoaded) {
-            finish();
+            Toast.makeText(QRScannerActivity.this, "Student data not loaded. ", Toast.LENGTH_SHORT).show();
+            redirectToStudentDashboard();
             return;
         }
 
@@ -156,17 +160,18 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
             checkBiometricSupport();
 
         } catch (Exception e) {
-            finish();
+            Toast.makeText(QRScannerActivity.this, "Invalid QR code.", Toast.LENGTH_SHORT).show();
+            redirectToStudentDashboard();
         }
     }
 
     private void checkBiometricSupport() {
         BiometricManager biometricManager = BiometricManager.from(this);
-        if (biometricManager.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS) {
+        if (biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS) {
             biometricPrompt.authenticate(promptInfo);
         } else {
-            Toast.makeText(QRScannerActivity.this, "Please mark attendance manually.", Toast.LENGTH_LONG).show();
-            finish();
+            Toast.makeText(QRScannerActivity.this, "Your device does not support fingerprint authentication. Go for Voice Recognition ...", Toast.LENGTH_LONG).show();
+            redirectToStudentDashboard();
         }
     }
 
@@ -175,8 +180,8 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 if (snapshot.exists()) {
-                    Toast.makeText(QRScannerActivity.this, "Attendance already marked.", Toast.LENGTH_SHORT).show();
-                    finish();
+                    Toast.makeText(QRScannerActivity.this, "Attendance already marked. ", Toast.LENGTH_SHORT).show();
+                    redirectToStudentDashboard();
                 } else {
                     markAttendance();
                 }
@@ -184,7 +189,8 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
-                finish();
+                Toast.makeText(QRScannerActivity.this, "Error checking attendance. ", Toast.LENGTH_SHORT).show();
+                redirectToStudentDashboard();
             }
         });
     }
@@ -196,9 +202,19 @@ public class QRScannerActivity extends AppCompatActivity implements ZXingScanner
         studentData.put("timestamp", new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date()));
 
         attendanceRef.setValue(studentData)
-                .addOnSuccessListener(unused -> Toast.makeText(QRScannerActivity.this, "Attendance Marked!", Toast.LENGTH_SHORT).show())
-                .addOnFailureListener(e -> Toast.makeText(QRScannerActivity.this, "Failed to mark attendance.", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(unused -> {
+                    Toast.makeText(QRScannerActivity.this, "Attendance Marked!", Toast.LENGTH_SHORT).show();
+                    redirectToStudentDashboard();
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(QRScannerActivity.this, "Failed to mark attendance. ", Toast.LENGTH_SHORT).show();
+                    redirectToStudentDashboard();
+                });
+    }
 
-        finish();
+    private void redirectToStudentDashboard() {
+        Intent intent = new Intent(QRScannerActivity.this, StudentDashboardActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
     }
 }
